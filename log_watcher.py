@@ -1,8 +1,6 @@
 from datetime import datetime
 from argparse import ArgumentParser
-from os import WCONTINUED
-from time import strftime
-
+from collections import Counter
 
 def log_reader(path):
     with open(path, 'r', encoding='utf-8') as f:
@@ -57,6 +55,8 @@ def cli_tool():
                             help="Enter start date.")
         parser.add_argument("--to",type=str,default=None,dest="to_d",
                             help="Enter end date.")
+        parser.add_argument("--stats",action="store_true",
+                            help="This gives a full detailed statistic about the given log file.")
 
         args = parser.parse_args()
 
@@ -67,6 +67,9 @@ def cli_tool():
             args.to_d = datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
 
         count = 0
+        level_count = Counter()
+        message_count = Counter()
+        keyword_count = Counter()
 
         for raw_line in log_reader(args.filename):
             parsed = log_parser(raw_line)
@@ -86,15 +89,41 @@ def cli_tool():
                 if not filter_by_keyword(parsed, args.keyword):
                     continue
 
+            if args.stats:
+                level_count[parsed["Level"]] += 1
+                message_count[parsed["Message"]] += 1
+
+                for word in parsed["Message"].split():
+                    keyword_count[word.lower()] += 1
+
+                continue
+
             if not args.countonly:
                 print(f"{parsed['Time']} | {parsed['Level']} | {parsed['Message']}")
             count += 1
 
-        if count == 0:
-            print(f"No matching results found.")
+        if args.stats:
+            print("=== Statistics ===")
+            print(f"Total matching logs: {sum(level_count.values())}\n")
+
+            print("Logs by level:")
+            for level, count in level_count.items():
+                print(f"  {level}: {count}")
+
+            print("\nTop 5 frequent messages:")
+            for msg, count in message_count.most_common(5):
+                print(f"  {msg} -> {count}")
+
+            print("\nTop 5 keywords:")
+            for word, count in keyword_count.most_common(5):
+                print(f"  {word} -> {count}")
 
         else:
-            print(f"\n{count} results.")
+            if count == 0:
+                print(f"No matching results found.")
+
+            else:
+                print(f"\n{count} results.")
 
 if __name__ == "__main__":
     cli_tool()
